@@ -1,4 +1,5 @@
 
+
 /**
  * index.tsx - Anemos Social App Prototype
  * This single file contains the entire React application logic.
@@ -6,10 +7,22 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
+// TypeScript declaration for the globally available `google` object from the GSI library
+declare const google: any;
+
 // --- CONFIGURATION ---
 // PASTE THE GOOGLE APPS SCRIPT URL YOU DEPLOYED HERE
 // FIX: Explicitly type SCRIPT_URL as string to prevent type inference issues.
 const SCRIPT_URL: string = 'https://script.google.com/macros/s/AKfycbxNByx59I3vLrL4Qamcxa1j1hH_MI2pmTzQcyB1WBkoaw2ulWonJUhoj-BHctQPa7FzPg/exec';
+
+// --- IMPORTANT: GOOGLE SIGN-IN CONFIGURATION ---
+// The 404 error during Google Sign-In is because this is a placeholder Client ID.
+// You MUST replace it with your own Client ID from the Google Cloud Console.
+// 1. Go to: https://console.cloud.google.com/apis/credentials
+// 2. Create an "OAuth 2.0 Client ID" for a "Web application".
+// 3. Add your app's URL to the "Authorized JavaScript origins".
+// 4. Copy the generated Client ID and paste it here.
+const GOOGLE_CLIENT_ID: string = '1099195983339-e4j37q0d091g6u8u0l8k2r2522j3e86g.apps.googleusercontent.com'; // <-- REPLACE THIS VALUE
 
 
 // --- SVG ICONS ---
@@ -207,8 +220,10 @@ const InspiredIcon = ({ className = 'w-7 h-7' }: { className?: string }) => <svg
 // Base user profile
 type UserProfile = {
     id: string;
-    username: string; // The full username, e.g., aria@anemos.com
-    password?: string; // Only for mock data, don't use in real app state
+    username: string; // The full username, e.g., aria@anemos.com or Google email
+    googleId?: string; // Google's unique user ID
+    authMethod: 'password' | 'google';
+    password?: string; // Only for 'password' auth method
     name: string; // The display name, e.g., Aria
     avatar: string;
     bio: string;
@@ -308,7 +323,8 @@ const ChatProvider = ({
 }: {
     chats: ChatConversation[],
     setChats: React.Dispatch<React.SetStateAction<ChatConversation[]>>,
-    children: React.ReactNode,
+// FIX: Make children optional to resolve 'Property 'children' is missing' error
+    children?: React.ReactNode,
     currentUser: UserProfile | null
 }) => {
     const getChatById = useCallback((chatId: string) => {
@@ -356,13 +372,13 @@ const ChatProvider = ({
 // --- MOCK DATA (for initial state) ---
 
 const allMockUsers: UserProfile[] = [
-    { id: 'user_aria', username: 'aria@anemos.com', password: 'password123', name: 'Aria', avatar: 'https://picsum.photos/id/237/200/200', bio: 'Wandering through digital winds and analog worlds. Capturing moments, sharing stories. 🌬️✨', friends: ['user_leo'] },
-    { id: 'user_leo', username: 'leo@anemos.com', password: 'password123', name: 'Leo', avatar: 'https://picsum.photos/id/338/100/100', bio: 'Music producer and indie enthusiast.', friends: ['user_aria'] },
-    { id: 'user_sasha', username: 'sasha@anemos.com', password: 'password123', name: 'Sasha Lee', avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200', bio: 'Designer & Dreamer.', friends: [] },
-    { id: 'user_greta', username: 'greta@anemos.com', password: 'password123', name: 'Greta Collins', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', bio: 'Coffee and code.', friends: [] },
-    { id: 'user_chris', username: 'chris@anemos.com', password: 'password123', name: 'Chris Walker', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200', bio: 'Exploring the world one step at a time.', friends: [] },
-    { id: 'user_jason', username: 'jason@anemos.com', password: 'password123', name: 'Jason Carter', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', bio: 'Film buff.', friends: [] },
-    { id: 'user_josh', username: 'josh@anemos.com', password: 'password123', name: 'Josh Hassan', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', bio: 'Always learning something new.', friends: [] },
+    { id: 'user_aria', username: 'aria@anemos.com', password: 'password123', authMethod: 'password', name: 'Aria', avatar: 'https://picsum.photos/id/237/200/200', bio: 'Wandering through digital winds and analog worlds. Capturing moments, sharing stories. 🌬️✨', friends: ['user_leo'] },
+    { id: 'user_leo', username: 'leo@anemos.com', password: 'password123', authMethod: 'password', name: 'Leo', avatar: 'https://picsum.photos/id/338/100/100', bio: 'Music producer and indie enthusiast.', friends: ['user_aria'] },
+    { id: 'user_sasha', username: 'sasha@anemos.com', password: 'password123', authMethod: 'password', name: 'Sasha Lee', avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200', bio: 'Designer & Dreamer.', friends: [] },
+    { id: 'user_greta', username: 'greta@anemos.com', password: 'password123', authMethod: 'password', name: 'Greta Collins', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', bio: 'Coffee and code.', friends: [] },
+    { id: 'user_chris', username: 'chris@anemos.com', password: 'password123', authMethod: 'password', name: 'Chris Walker', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200', bio: 'Exploring the world one step at a time.', friends: [] },
+    { id: 'user_jason', username: 'jason@anemos.com', password: 'password123', authMethod: 'password', name: 'Jason Carter', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', bio: 'Film buff.', friends: [] },
+    { id: 'user_josh', username: 'josh@anemos.com', password: 'password123', authMethod: 'password', name: 'Josh Hassan', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', bio: 'Always learning something new.', friends: [] },
 ];
 
 const storiesData = Array.from({ length: 8 }, (_, i) => ({
@@ -1437,71 +1453,36 @@ const AuthLayout = ({ children }: { children?: React.ReactNode }) => (
     </div>
 );
 
-const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, pass: string) => Promise<boolean>; onSwitchToSignUp: () => void; }) => {
+const LoginPage = ({ onLogin, onSwitchToSignUp, error, clearError }: { onLogin: (username: string, pass: string) => Promise<boolean>; onSwitchToSignUp: () => void; error: string; clearError: () => void; }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(true);
-    const [savedAccounts, setSavedAccounts] = useState<{username: string, password: string}[]>([]);
-    const [showSavedAccounts, setShowSavedAccounts] = useState(false);
-    const usernameInputRef = useRef<HTMLDivElement>(null);
-
+    
     useEffect(() => {
-        try {
-            const saved = localStorage.getItem('anemos-saved-accounts');
-            if (saved) {
-                setSavedAccounts(JSON.parse(saved));
+        // Render the Google Sign-In button
+// FIX: Use global `google` object directly instead of `window.google` to avoid TypeScript error.
+        if (google) {
+            const buttonDiv = document.getElementById('google-signin-button');
+            if (buttonDiv && !buttonDiv.hasChildNodes()) { // Render only if empty
+                google.accounts.id.renderButton(
+                    buttonDiv,
+                    { theme: "outline", size: "large", type: 'standard', text: 'signin_with', width: '320' }
+                );
             }
-        } catch (e) {
-            console.error("Failed to parse saved accounts from localStorage", e);
-            localStorage.removeItem('anemos-saved-accounts');
         }
-    }, []);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (usernameInputRef.current && !usernameInputRef.current.contains(event.target as Node)) {
-                setShowSavedAccounts(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        clearError();
         setIsLoading(true);
         const success = await onLogin(username, password);
         if (!success) {
-            setError('Username o password non validi.');
-        } else {
-             // NOTE: Saving credentials to localStorage is insecure and only for this prototype.
-            if (rememberMe) {
-                const updatedAccounts = [...savedAccounts];
-                const existingAccountIndex = updatedAccounts.findIndex(acc => acc.username.toLowerCase() === username.toLowerCase());
-                
-                const newAccount = { username, password };
-
-                if (existingAccountIndex > -1) {
-                    updatedAccounts[existingAccountIndex] = newAccount;
-                } else {
-                    updatedAccounts.push(newAccount);
-                }
-                localStorage.setItem('anemos-saved-accounts', JSON.stringify(updatedAccounts));
-                setSavedAccounts(updatedAccounts);
-            }
+            // Error will be set by parent component
         }
         setIsLoading(false);
     };
-
-    const handleSelectAccount = (account: {username: string, password: string}) => {
-        setUsername(account.username);
-        setPassword(account.password);
-        setShowSavedAccounts(false);
-    }
 
     return (
         <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 animate-fadeIn">
@@ -1510,25 +1491,7 @@ const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1">Username</label>
-                    <div className="relative" ref={usernameInputRef}>
-                        <input type="text" id="username" value={username} onChange={e => setUsername(e.target.value)} onFocus={() => savedAccounts.length > 0 && setShowSavedAccounts(true)} placeholder="es. aria@anemos.com" required className="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-900" />
-                        {showSavedAccounts && savedAccounts.length > 0 && (
-                            <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg z-20 animate-fadeInUp max-h-40 overflow-y-auto">
-                                <ul>
-                                    {savedAccounts.map((account) => (
-                                        <li 
-                                            key={account.username}
-                                            onClick={() => handleSelectAccount(account)}
-                                            className="px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 cursor-pointer flex items-center gap-2"
-                                        >
-                                            <UserCircleIcon className="w-5 h-5 text-slate-400"/>
-                                            <span>{account.username}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
+                    <input type="text" id="username" value={username} onChange={e => setUsername(e.target.value)} placeholder="es. aria@anemos.com" required className="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-900" />
                 </div>
                 <div>
                     <label htmlFor="password"  className="block text-sm font-medium text-slate-700 mb-1">Password</label>
@@ -1539,12 +1502,20 @@ const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, 
                         </button>
                     </div>
                 </div>
-                 <div className="flex items-center">
-                    <input id="remember-me" name="remember-me" type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"/>
-                    <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-700">Salva dati di accesso</label>
-                </div>
                 <button type="submit" disabled={isLoading} className="w-full bg-teal-500 text-black font-semibold py-2.5 rounded-lg hover:bg-teal-600 transition disabled:bg-teal-300">{isLoading ? 'Accesso...' : 'Entra nel Vento'}</button>
             </form>
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t border-slate-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-2 text-slate-500">O continua con</span>
+              </div>
+            </div>
+            
+            <div id="google-signin-button" className="flex justify-center"></div>
+
             <p className="text-center text-sm text-slate-500 mt-6">
                 Non hai ancora un account? <button onClick={onSwitchToSignUp} className="font-semibold text-teal-600 hover:underline">Registrati</button>
             </p>
@@ -1574,7 +1545,7 @@ const SignUpPage = ({ onSignUp, onSwitchToLogin }: { onSignUp: (username: string
         setIsLoading(true);
         const success = await onSignUp(username, password);
         if (!success) {
-            setError('Questo username è già stato preso.');
+            setError('Questo username è già stato preso o l\'email è associata a un account Google.');
         }
         setIsLoading(false);
     };
@@ -1613,6 +1584,58 @@ const SignUpPage = ({ onSignUp, onSwitchToLogin }: { onSignUp: (username: string
     );
 };
 
+const GoogleOnboardingPage = ({ googleData, allUsers, onComplete }: { googleData: any; allUsers: UserProfile[], onComplete: (displayName: string, anemosUsername: string) => void }) => {
+    const [displayName, setDisplayName] = useState(googleData.name || '');
+    const [anemosUsername, setAnemosUsername] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
+
+        const fullAnemosUsername = `${anemosUsername.toLowerCase()}@anemos.com`;
+        if (allUsers.some(u => u.username === fullAnemosUsername)) {
+            setError('Questo username è già stato preso. Scegline un altro.');
+            setIsLoading(false);
+            return;
+        }
+
+        onComplete(displayName, anemosUsername);
+    };
+
+    return (
+        <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 animate-fadeIn">
+            <h2 className="text-2xl font-bold text-center text-slate-800">Quasi dentro!</h2>
+            <p className="text-center text-slate-500 text-sm mb-6">Completa il tuo profilo Anemos.</p>
+            
+            <div className="flex flex-col items-center gap-2 mb-6">
+                <img src={googleData.picture} alt="Profile preview" className="w-20 h-20 rounded-full object-cover ring-4 ring-teal-400/20 shadow-lg" />
+                <p className="text-sm font-medium text-slate-600">{googleData.email}</p>
+            </div>
+            
+            {error && <p className="bg-red-100 text-red-700 text-sm font-medium p-3 rounded-lg mb-4 text-center">{error}</p>}
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+                 <div>
+                    <label htmlFor="displayName" className="block text-sm font-medium text-slate-700 mb-1">Il tuo nome visualizzato</label>
+                    <input type="text" id="displayName" value={displayName} onChange={e => setDisplayName(e.target.value)} required className="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-900" />
+                </div>
+                 <div>
+                    <label htmlFor="anemosUsername" className="block text-sm font-medium text-slate-700 mb-1">Scegli il tuo username Anemos</label>
+                    <div className="flex items-center">
+                        <input type="text" id="anemosUsername" value={anemosUsername} onChange={e => setAnemosUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))} required className="block w-full px-3 py-2 bg-slate-50 border border-r-0 border-slate-300 rounded-l-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 z-10 text-slate-900" />
+                        <span className="inline-flex items-center px-3 py-2 border border-l-0 border-slate-300 bg-slate-100 text-slate-500 text-sm rounded-r-md">@anemos.com</span>
+                    </div>
+                </div>
+                <button type="submit" disabled={isLoading} className="w-full bg-teal-500 text-black font-semibold py-2.5 rounded-lg hover:bg-teal-600 transition disabled:bg-teal-300">{isLoading ? 'Creazione...' : 'Completa e Unisciti ad Anemos'}</button>
+            </form>
+        </div>
+    );
+};
+
+
 const App = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [view, setView] = useState<View>('home');
@@ -1627,10 +1650,26 @@ const App = () => {
     const [roomToEdit, setRoomToEdit] = useState<Room | null>(null);
     const [activeChatId, setActiveChatId] = useState<string|null>(null);
     const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
-    const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+    const [authView, setAuthView] = useState<'login' | 'signup' | 'google-onboarding'>('login');
+    const [googleOnboardingData, setGoogleOnboardingData] = useState<any | null>(null);
+    const [loginError, setLoginError] = useState('');
     
     const debounceTimeoutRef = useRef<number | null>(null);
     const isInitialMount = useRef(true);
+    
+    const decodeJwt = (token: string) => {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (e) {
+        console.error("Failed to decode JWT", e);
+        return null;
+      }
+    };
 
 
     // Effect for initial data loading from Google Sheet
@@ -1643,6 +1682,7 @@ const App = () => {
                 const normalizedUsers = persistedData.users.map(u => ({
                     ...u,
                     friends: u.friends || [],
+                    authMethod: u.authMethod || 'password' // Backwards compatibility
                 }));
 
                 setUsers(normalizedUsers);
@@ -1717,15 +1757,50 @@ const App = () => {
         // Cleanup interval on component unmount or when dependencies change
         return () => clearInterval(intervalId);
     }, [currentUser, chats, rooms, friendRequests]);
+    
+    const handleGoogleCredentialResponse = useCallback((response: any) => {
+        setLoginError('');
+        const decoded = decodeJwt(response.credential);
+        if (!decoded) {
+            setLoginError("Accesso con Google fallito. Riprova.");
+            return;
+        }
+
+        const existingUser = users.find(u => u.googleId === decoded.sub || u.username === decoded.email);
+
+        if (existingUser) {
+            if (existingUser.authMethod === 'google') {
+                const { password, ...userToSet } = existingUser;
+                setCurrentUser(userToSet);
+            } else {
+                setLoginError("Questa email è già registrata con una password. Accedi con la tua password.");
+            }
+        } else {
+            // New user, start onboarding
+            setGoogleOnboardingData(decoded);
+            setAuthView('google-onboarding');
+        }
+    }, [users]);
+    
+    useEffect(() => {
+// FIX: Use global `google` object directly instead of `window.google` to avoid TypeScript error.
+        if (typeof google !== 'undefined' && !currentUser) {
+            google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID, // Use the constant from the configuration section
+                callback: handleGoogleCredentialResponse,
+            });
+        }
+    }, [handleGoogleCredentialResponse, currentUser]);
 
     const handleLogin = async (username: string, pass: string): Promise<boolean> => {
         await new Promise(res => setTimeout(res, 500)); // Simulate network delay
-        const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === pass);
+        const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.authMethod === 'password' && u.password === pass);
         if (user) {
             const { password, ...userToSet } = user;
             setCurrentUser(userToSet);
             return true;
         }
+        setLoginError('Username o password non validi.');
         return false;
     };
 
@@ -1739,6 +1814,7 @@ const App = () => {
             id: `user_${Date.now()}`,
             username: fullUsername,
             password: pass,
+            authMethod: 'password',
             name: username.charAt(0).toUpperCase() + username.slice(1),
             avatar: `https://picsum.photos/seed/${username}/200/200`,
             bio: 'Nuovo soffio nel vento di Anemos! 🌬️',
@@ -1748,6 +1824,28 @@ const App = () => {
         const { password, ...userToSet } = newUser;
         setCurrentUser(userToSet);
         return true;
+    };
+    
+    const handleCompleteGoogleOnboarding = (displayName: string, anemosUsername: string) => {
+        if (!googleOnboardingData) return;
+
+        const fullAnemosUsername = `${anemosUsername.toLowerCase()}@anemos.com`;
+        
+        const newUser: UserProfile = {
+            id: `user_${Date.now()}`,
+            googleId: googleOnboardingData.sub,
+            username: fullAnemosUsername,
+            authMethod: 'google',
+            name: displayName,
+            avatar: googleOnboardingData.picture,
+            bio: 'Nuovo soffio nel vento di Anemos! 🌬️',
+            friends: [],
+        };
+        
+        setUsers(prev => [...prev, newUser]);
+        setCurrentUser(newUser);
+        setGoogleOnboardingData(null);
+        setAuthView('login');
     };
     
     const handleSendFriendRequest = (toUserId: string) => {
@@ -1791,6 +1889,10 @@ const App = () => {
 
 
     const handleLogout = () => {
+// FIX: Use global `google` object directly instead of `window.google` to avoid TypeScript error.
+        if (typeof google !== 'undefined') {
+            google.accounts.id.disableAutoSelect();
+        }
         setCurrentUser(null);
         setView('home'); // Reset view
         setAuthView('login'); // Reset to login screen
@@ -1800,8 +1902,10 @@ const App = () => {
         if (!currentUser) return;
         const updatedUser = { ...currentUser, ...newUser };
         setCurrentUser(updatedUser);
-        // In a real app, this would also update the `users` array/database
-        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, password: u.password } : u));
+        
+        const originalUser = users.find(u => u.id === updatedUser.id);
+        
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, password: originalUser?.password, googleId: originalUser?.googleId } : u));
         setView('profile');
     };
 
@@ -2008,10 +2112,9 @@ const App = () => {
     if (!currentUser) {
       return (
           <AuthLayout>
-              {authView === 'login' 
-                  ? <LoginPage onLogin={handleLogin} onSwitchToSignUp={() => setAuthView('signup')} />
-                  : <SignUpPage onSignUp={handleSignUp} onSwitchToLogin={() => setAuthView('login')} />
-              }
+              {authView === 'login' && <LoginPage onLogin={handleLogin} onSwitchToSignUp={() => { setAuthView('signup'); setLoginError(''); }} error={loginError} clearError={() => setLoginError('')} />}
+              {authView === 'signup' && <SignUpPage onSignUp={handleSignUp} onSwitchToLogin={() => setAuthView('login')} />}
+              {authView === 'google-onboarding' && googleOnboardingData && <GoogleOnboardingPage googleData={googleOnboardingData} allUsers={users} onComplete={handleCompleteGoogleOnboarding} />}
           </AuthLayout>
       );
     }
