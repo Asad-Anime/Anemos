@@ -258,6 +258,77 @@ type AppState = {
     chats: ChatConversation[];
 };
 
+// --- CHAT CONTEXT & PROVIDER ---
+// Using React Context for a frontend-only global state management for chats.
+type ChatContextType = {
+    chats: ChatConversation[];
+    getChatById: (chatId: string) => ChatConversation | undefined;
+    sendMessage: (chatId: string, text: string) => void;
+    markChatAsRead: (chatId: string) => void;
+};
+
+const ChatContext = React.createContext<ChatContextType | undefined>(undefined);
+
+const useChat = () => {
+    const context = React.useContext(ChatContext);
+    if (context === undefined) {
+        throw new Error('useChat must be used within a ChatProvider');
+    }
+    return context;
+};
+
+const ChatProvider = ({
+    chats,
+    setChats,
+    children,
+    currentUser
+}: {
+    chats: ChatConversation[],
+    setChats: React.Dispatch<React.SetStateAction<ChatConversation[]>>,
+    children: React.ReactNode,
+    currentUser: UserProfile | null
+}) => {
+    const getChatById = useCallback((chatId: string) => {
+        return chats.find(c => c.id === chatId);
+    }, [chats]);
+
+    const sendMessage = useCallback((chatId: string, text: string) => {
+        if (!currentUser) return;
+        const newMessage: Message = {
+            id: `msg_${Date.now()}`,
+            text,
+            senderId: currentUser.id,
+            timestamp: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setChats(prevChats => prevChats.map(chat =>
+            chat.id === chatId
+                ? { ...chat, messages: [...chat.messages, newMessage] }
+                : chat
+        ));
+    }, [currentUser, setChats]);
+
+    const markChatAsRead = useCallback((chatId: string) => {
+        setChats(prevChats => prevChats.map(chat =>
+            (chat.id === chatId && chat.unreadCount > 0) ? { ...chat, unreadCount: 0 } : chat
+        ));
+    }, [setChats]);
+
+    const value = useMemo(() => ({
+        chats,
+        getChatById,
+        sendMessage,
+        markChatAsRead,
+    }), [chats, getChatById, sendMessage, markChatAsRead]);
+
+
+    return (
+        <ChatContext.Provider value={value}>
+            {children}
+        </ChatContext.Provider>
+    );
+};
+
 
 // --- MOCK DATA (for initial state) ---
 
@@ -972,7 +1043,8 @@ const RoomsPage = ({ rooms, currentUser, onNavigateToCreate, onJoinByCode, onJoi
     );
 };
 
-const ChatListPage = ({ chats, onSelectChat }: { chats: ChatConversation[], onSelectChat: (chatId: string) => void }) => {
+const ChatListPage = ({ onSelectChat }: { onSelectChat: (chatId: string) => void }) => {
+    const { chats } = useChat();
     const [searchTerm, setSearchTerm] = useState('');
     const filteredChats = chats.filter(chat => chat.participant.username.toLowerCase().includes(searchTerm.toLowerCase()));
     
@@ -1027,20 +1099,36 @@ const ChatListPage = ({ chats, onSelectChat }: { chats: ChatConversation[], onSe
     );
 };
 
-const ConversationPage = ({ chat, currentUser, onBack, onSendMessage }: { chat: ChatConversation, currentUser: UserProfile, onBack: () => void, onSendMessage: (chatId: string, text: string) => void }) => {
+const ConversationPage = ({ chatId, currentUser, onBack }: { chatId: string, currentUser: UserProfile, onBack: () => void }) => {
+    const { getChatById, sendMessage, markChatAsRead } = useChat();
+    const chat = getChatById(chatId);
     const [newMessage, setNewMessage] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (chat) {
+            markChatAsRead(chatId);
+        } else {
+            // If chat is not found (e.g., while data is loading), go back to the list.
+            const timer = setTimeout(() => onBack(), 100);
+            return () => clearTimeout(timer);
+        }
+    }, [chat, chatId, markChatAsRead, onBack]);
+
+    useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [chat.messages]);
+    }, [chat?.messages]);
 
     const handleSend = () => {
         if (newMessage.trim()) {
-            onSendMessage(chat.id, newMessage.trim());
+            sendMessage(chatId, newMessage.trim());
             setNewMessage('');
         }
     };
+
+    if (!chat) {
+        return null; // Render nothing while waiting for chat data or redirecting
+    }
 
     return (
         <div className="fixed inset-0 bg-sky-50 flex flex-col z-50 animate-fadeIn">
@@ -1492,22 +1580,6 @@ const App = () => {
         setActiveChatId(chatId);
     };
 
-    const handleSendMessage = (chatId: string, text: string) => {
-        if (!currentUser) return;
-        const newMessage: Message = {
-            id: `msg_${Date.now()}`,
-            text,
-            senderId: currentUser.id,
-            timestamp: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-        };
-        
-        setChats(prevChats => prevChats.map(chat =>
-            chat.id === chatId
-                ? { ...chat, messages: [...chat.messages, newMessage] }
-                : chat
-        ));
-    };
-
     const renderView = () => {
         if (!currentUser) return null; // Should not happen if logic is correct
         switch (view) {
@@ -1520,10 +1592,9 @@ const App = () => {
             case 'live-room': return currentRoom ? <LiveRoomPage room={currentRoom} currentUser={currentUser} onLeave={handleLeaveRoom} onAcceptRequest={handleAcceptRequest} onDeclineRequest={handleDeclineRequest} onRemoveParticipant={handleRemoveParticipant} onToggleMute={handleToggleMute} onToggleVideo={handleToggleVideo} /> : <RoomsPage rooms={rooms} currentUser={currentUser} onNavigateToCreate={() => setView('create-room')} onJoinByCode={handleJoinByCode} onJoinRoom={handleJoinRoom} onNavigateToEdit={handleNavigateToEdit} onDeleteRoom={handleDeleteRoom} />;
             case 'chat': {
                 if (activeChatId) {
-                    const activeChat = chats.find(c => c.id === activeChatId);
-                    return activeChat ? <ConversationPage chat={activeChat} currentUser={currentUser} onBack={() => setActiveChatId(null)} onSendMessage={handleSendMessage} /> : <ChatListPage chats={chats} onSelectChat={handleSelectChat} />;
+                    return <ConversationPage chatId={activeChatId} currentUser={currentUser} onBack={() => setActiveChatId(null)} />;
                 }
-                return <ChatListPage chats={chats} onSelectChat={handleSelectChat} />;
+                return <ChatListPage onSelectChat={handleSelectChat} />;
             }
             default: return (<div className="animate-fadeIn"><Stories /><Feed /></div>);
         }
@@ -1555,13 +1626,15 @@ const App = () => {
 
 
     return (
-        <div className="bg-sky-50 min-h-screen font-sans text-slate-800 pb-20">
-             {!isFullScreenView && <Header onLogoClick={handleLogoClick} />}
-             <div className={!isFullScreenView ? "" : "h-screen"}>
-                {renderView()}
-             </div>
-             {!isFullScreenView && <BottomNav activeView={activeView} setActiveView={(v) => { setActiveChatId(null); setView(v); }} />}
-        </div>
+        <ChatProvider chats={chats} setChats={setChats} currentUser={currentUser}>
+            <div className="bg-sky-50 min-h-screen font-sans text-slate-800 pb-20">
+                 {!isFullScreenView && <Header onLogoClick={handleLogoClick} />}
+                 <div className={!isFullScreenView ? "" : "h-screen"}>
+                    {renderView()}
+                 </div>
+                 {!isFullScreenView && <BottomNav activeView={activeView} setActiveView={(v) => { setActiveChatId(null); setView(v); }} />}
+            </div>
+        </ChatProvider>
     );
 };
 
