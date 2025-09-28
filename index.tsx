@@ -147,6 +147,10 @@ const UserMinusIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
 );
 
+const UserCheckIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+);
+
 const UsersIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.962A3.75 3.75 0 0 1 12 15v-2.25A3.75 3.75 0 0 1 15.75 9V6.75a3.75 3.75 0 0 1-3.75-3.75v-2.25A3.75 3.75 0 0 0 8.25 9v2.25A3.75 3.75 0 0 0 12 15.75v2.25m-8.25-5.5-2.25.005a2.25 2.25 0 0 0-2.25 2.25v1.5a2.25 2.25 0 0 0 2.25 2.25h1.5a2.25 2.25 0 0 0 2.25-2.25v-1.5a2.25 2.25 0 0 0-2.25-2.25Z" /></svg>
 );
@@ -482,7 +486,7 @@ const SplashScreen = () => (
     </div>
 );
 
-const Header = ({ onLogoClick, onSearchClick }: { onLogoClick: () => void; onSearchClick: () => void; }) => {
+const Header = ({ onLogoClick, onSearchClick, onNotificationsClick, pendingRequestsCount }: { onLogoClick: () => void; onSearchClick: () => void; onNotificationsClick: () => void; pendingRequestsCount: number; }) => {
     const [isAnimating, setIsAnimating] = useState(false);
     const handleClick = () => { setIsAnimating(true); onLogoClick(); };
     return (
@@ -494,9 +498,9 @@ const Header = ({ onLogoClick, onSearchClick }: { onLogoClick: () => void; onSea
                 </div>
                 <div className="flex items-center gap-4 text-slate-600">
                     <button aria-label="Search" onClick={onSearchClick}><SearchIcon className="w-6 h-6" /></button>
-                    <button aria-label="Notifications" className="relative">
+                    <button aria-label="Notifications" className="relative" onClick={onNotificationsClick}>
                         <BellIcon className="w-6 h-6" />
-                        <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-teal-400 ring-2 ring-white" />
+                        {pendingRequestsCount > 0 && <span className="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-teal-400 ring-2 ring-white" />}
                     </button>
                 </div>
             </div>
@@ -1303,6 +1307,60 @@ const SearchModal = ({ isOpen, onClose, currentUser, allUsers, friendRequests, o
     );
 };
 
+const NotificationsPanel = ({ isOpen, onClose, requests, users, onAccept, onDecline }: { isOpen: boolean; onClose: () => void; requests: FriendRequest[]; users: UserProfile[]; onAccept: (requestId: string) => void; onDecline: (requestId: string) => void; }) => {
+    if (!isOpen) return null;
+
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onClose]);
+
+    const requestUsers = requests.map(req => {
+        const user = users.find(u => u.id === req.fromUserId);
+        return user ? { ...req, user } : null;
+    }).filter(Boolean) as (FriendRequest & { user: UserProfile })[];
+
+    return (
+        <div ref={panelRef} className="absolute top-16 right-4 w-full max-w-sm bg-white rounded-xl shadow-lg border border-slate-200 z-50 animate-fadeInUp overflow-hidden">
+            <div className="p-3 border-b border-slate-200">
+                <h3 className="font-bold text-slate-800">Richieste di Amicizia</h3>
+            </div>
+            {requestUsers.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center p-6">Nessuna nuova richiesta.</p>
+            ) : (
+                <ul className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                    {requestUsers.map(req => (
+                        <li key={req.id} className="p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                <img src={req.user.avatar} alt={req.user.name} className="w-10 h-10 rounded-full flex-shrink-0" />
+                                <div className="truncate">
+                                    <p className="font-semibold text-slate-800 truncate">{req.user.name}</p>
+                                    <p className="text-xs text-slate-500 truncate">{req.user.username}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <button onClick={() => onDecline(req.id)} className="p-2 rounded-full hover:bg-slate-100" aria-label="Decline">
+                                    <XMarkIcon className="w-5 h-5 text-slate-500" />
+                                </button>
+                                <button onClick={() => onAccept(req.id)} className="p-2 rounded-full bg-teal-50 hover:bg-teal-100" aria-label="Accept">
+                                    <UserCheckIcon className="w-5 h-5 text-teal-600"/>
+                                </button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
 // --- AUTHENTICATION COMPONENTS ---
 
 // FIX: Make children optional to resolve 'Property 'children' is missing' error which may be due to a linter misinterpretation.
@@ -1504,6 +1562,7 @@ const App = () => {
     const [chats, setChats] = useState<ChatConversation[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
     const [roomToEdit, setRoomToEdit] = useState<Room | null>(null);
     const [activeChatId, setActiveChatId] = useState<string|null>(null);
@@ -1611,6 +1670,35 @@ const App = () => {
         };
         setFriendRequests(prev => [...prev, newRequest]);
     };
+    
+    const handleAcceptFriendRequest = (requestId: string) => {
+        const request = friendRequests.find(r => r.id === requestId);
+        if (!request || !currentUser) return;
+
+        // Update friends for both users
+        const updatedUsers = users.map(user => {
+            if (user.id === request.fromUserId) {
+                return { ...user, friends: [...user.friends, request.toUserId] };
+            }
+            if (user.id === request.toUserId) {
+                return { ...user, friends: [...user.friends, request.fromUserId] };
+            }
+            return user;
+        });
+
+        setUsers(updatedUsers);
+        
+        // Also update currentUser state to reflect new friendship immediately
+        setCurrentUser(prev => prev ? { ...prev, friends: [...prev.friends, request.fromUserId]} : null);
+
+        // Remove the request
+        setFriendRequests(prev => prev.filter(r => r.id !== requestId));
+    };
+
+    const handleDeclineFriendRequest = (requestId: string) => {
+        setFriendRequests(prev => prev.filter(r => r.id !== requestId));
+    };
+
 
     const handleLogout = () => {
         setCurrentUser(null);
@@ -1809,11 +1897,20 @@ const App = () => {
     
     const isFullScreenView = (view === 'live-room' && currentRoom) || (view === 'chat' && activeChatId);
 
+    const pendingRequestsForCurrentUser = friendRequests.filter(req => req.toUserId === currentUser.id);
 
     return (
         <ChatProvider chats={chats} setChats={setChats} currentUser={currentUser}>
             <div className="bg-sky-50 min-h-screen font-sans text-slate-800 pb-20">
-                 {!isFullScreenView && <Header onLogoClick={handleLogoClick} onSearchClick={() => setIsSearchOpen(true)} />}
+                 {!isFullScreenView && <Header onLogoClick={handleLogoClick} onSearchClick={() => setIsSearchOpen(true)} onNotificationsClick={() => setIsNotificationsOpen(p => !p)} pendingRequestsCount={pendingRequestsForCurrentUser.length} />}
+                 <NotificationsPanel
+                    isOpen={isNotificationsOpen}
+                    onClose={() => setIsNotificationsOpen(false)}
+                    requests={pendingRequestsForCurrentUser}
+                    users={users}
+                    onAccept={handleAcceptFriendRequest}
+                    onDecline={handleDeclineFriendRequest}
+                 />
                  {currentUser && <SearchModal 
                     isOpen={isSearchOpen} 
                     onClose={() => setIsSearchOpen(false)}
