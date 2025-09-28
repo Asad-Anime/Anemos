@@ -187,6 +187,10 @@ const UserCircleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
 );
 
+const UserPlusIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3.375 19.5h17.25a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H3.375a2.25 2.25 0 0 0-2.25 2.25v10.5a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+);
+
 
 // --- REACTION ICONS ---
 const AppreciateIcon = ({ className = 'w-7 h-7' }: { className?: string }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>;
@@ -203,6 +207,14 @@ type UserProfile = {
     name: string; // The display name, e.g., Aria
     avatar: string;
     bio: string;
+    friends: string[]; // List of friend user IDs
+};
+
+type FriendRequest = {
+    id: string;
+    fromUserId: string;
+    toUserId: string;
+    status: 'pending';
 };
 
 // Feed post structure
@@ -261,6 +273,7 @@ type AppState = {
     users: UserProfile[];
     rooms: Room[];
     chats: ChatConversation[];
+    friendRequests: FriendRequest[];
 };
 
 // --- CHAT CONTEXT & PROVIDER ---
@@ -337,23 +350,14 @@ const ChatProvider = ({
 
 // --- MOCK DATA (for initial state) ---
 
-const mockUsers: UserProfile[] = [
-    {
-        id: 'user_aria',
-        username: 'aria@anemos.com',
-        password: 'password123',
-        name: 'Aria',
-        avatar: 'https://picsum.photos/id/237/200/200',
-        bio: 'Wandering through digital winds and analog worlds. Capturing moments, sharing stories. 🌬️✨',
-    },
-    {
-        id: 'user_leo',
-        username: 'leo@anemos.com',
-        password: 'password123',
-        name: 'Leo',
-        avatar: 'https://picsum.photos/id/338/100/100',
-        bio: 'Music producer and indie enthusiast.',
-    }
+const allMockUsers: UserProfile[] = [
+    { id: 'user_aria', username: 'aria@anemos.com', password: 'password123', name: 'Aria', avatar: 'https://picsum.photos/id/237/200/200', bio: 'Wandering through digital winds and analog worlds. Capturing moments, sharing stories. 🌬️✨', friends: ['user_leo'] },
+    { id: 'user_leo', username: 'leo@anemos.com', password: 'password123', name: 'Leo', avatar: 'https://picsum.photos/id/338/100/100', bio: 'Music producer and indie enthusiast.', friends: ['user_aria'] },
+    { id: 'user_sasha', username: 'sasha@anemos.com', password: 'password123', name: 'Sasha Lee', avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200', bio: 'Designer & Dreamer.', friends: [] },
+    { id: 'user_greta', username: 'greta@anemos.com', password: 'password123', name: 'Greta Collins', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', bio: 'Coffee and code.', friends: [] },
+    { id: 'user_chris', username: 'chris@anemos.com', password: 'password123', name: 'Chris Walker', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200', bio: 'Exploring the world one step at a time.', friends: [] },
+    { id: 'user_jason', username: 'jason@anemos.com', password: 'password123', name: 'Jason Carter', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', bio: 'Film buff.', friends: [] },
+    { id: 'user_josh', username: 'josh@anemos.com', password: 'password123', name: 'Josh Hassan', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', bio: 'Always learning something new.', friends: [] },
 ];
 
 const storiesData = Array.from({ length: 8 }, (_, i) => ({
@@ -423,6 +427,8 @@ const initialChatsData: ChatConversation[] = [
     },
 ];
 
+const initialFriendRequestsData: FriendRequest[] = [];
+
 // --- API SERVICE ---
 const api = {
     fetchData: async (): Promise<AppState | null> => {
@@ -476,7 +482,7 @@ const SplashScreen = () => (
     </div>
 );
 
-const Header = ({ onLogoClick }: { onLogoClick: () => void }) => {
+const Header = ({ onLogoClick, onSearchClick }: { onLogoClick: () => void; onSearchClick: () => void; }) => {
     const [isAnimating, setIsAnimating] = useState(false);
     const handleClick = () => { setIsAnimating(true); onLogoClick(); };
     return (
@@ -487,7 +493,7 @@ const Header = ({ onLogoClick }: { onLogoClick: () => void }) => {
                     <span className="text-xl font-bold text-slate-800">Anemos</span>
                 </div>
                 <div className="flex items-center gap-4 text-slate-600">
-                    <button aria-label="Search"><SearchIcon className="w-6 h-6" /></button>
+                    <button aria-label="Search" onClick={onSearchClick}><SearchIcon className="w-6 h-6" /></button>
                     <button aria-label="Notifications" className="relative">
                         <BellIcon className="w-6 h-6" />
                         <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-teal-400 ring-2 ring-white" />
@@ -1216,6 +1222,87 @@ const BottomNav = ({ activeView, setActiveView }: { activeView: View; setActiveV
     );
 };
 
+const SearchModal = ({ isOpen, onClose, currentUser, allUsers, friendRequests, onSendRequest }: { isOpen: boolean; onClose: () => void; currentUser: UserProfile; allUsers: UserProfile[]; friendRequests: FriendRequest[]; onSendRequest: (toUserId: string) => void; }) => {
+    if (!isOpen) return null;
+
+    const [query, setQuery] = useState('');
+
+    const searchResults = useMemo(() => {
+        if (!query.trim()) return [];
+        return allUsers.filter(user =>
+            user.id !== currentUser.id &&
+            user.name.toLowerCase().includes(query.toLowerCase())
+        );
+    }, [query, allUsers, currentUser.id]);
+
+    const getFriendshipStatus = (targetUser: UserProfile) => {
+        if (currentUser.friends.includes(targetUser.id)) {
+            return 'friends';
+        }
+        if (friendRequests.some(req => req.fromUserId === currentUser.id && req.toUserId === targetUser.id)) {
+            return 'sent';
+        }
+        if (friendRequests.some(req => req.fromUserId === targetUser.id && req.toUserId === currentUser.id)) {
+            return 'received';
+        }
+        return 'none';
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-start pt-20 animate-fadeIn" onClick={onClose}>
+            <div className="bg-white w-full max-w-md rounded-xl shadow-lg flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-slate-200">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <SearchIcon className="w-5 h-5 text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Cerca persone per nome..."
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            className="w-full bg-slate-100 border border-slate-200 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+                <div className="p-2 min-h-[10rem] max-h-[60vh] overflow-y-auto">
+                    {query.trim() && searchResults.length === 0 && (
+                        <div className="text-center py-8 text-slate-500">
+                            <p>Nessun utente trovato per "{query}"</p>
+                        </div>
+                    )}
+                    {!query.trim() && (
+                        <div className="text-center py-8 text-slate-400">
+                            <p>Inizia a digitare per trovare i tuoi amici.</p>
+                        </div>
+                    )}
+                    <ul className="divide-y divide-slate-100">
+                        {searchResults.map(user => {
+                            const status = getFriendshipStatus(user);
+                            return (
+                                <li key={user.id} className="p-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full"/>
+                                        <div>
+                                            <p className="font-semibold text-slate-800">{user.name}</p>
+                                            <p className="text-xs text-slate-500">{user.username}</p>
+                                        </div>
+                                    </div>
+                                    {status === 'none' && <button onClick={() => onSendRequest(user.id)} className="bg-teal-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-teal-600 transition flex items-center gap-1"><UserPlusIcon className="w-4 h-4" /> Invia Richiesta</button>}
+                                    {status === 'sent' && <p className="text-xs text-slate-500 font-medium">Richiesta inviata</p>}
+                                    {status === 'received' && <p className="text-xs text-purple-600 font-medium">Richiesta ricevuta</p>}
+                                    {status === 'friends' && <p className="text-xs text-green-600 font-medium">Amici</p>}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- AUTHENTICATION COMPONENTS ---
 
 // FIX: Make children optional to resolve 'Property 'children' is missing' error which may be due to a linter misinterpretation.
@@ -1415,6 +1502,8 @@ const App = () => {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [chats, setChats] = useState<ChatConversation[]>([]);
+    const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
     const [roomToEdit, setRoomToEdit] = useState<Room | null>(null);
     const [activeChatId, setActiveChatId] = useState<string|null>(null);
@@ -1429,16 +1518,25 @@ const App = () => {
         const loadData = async () => {
             const persistedData = await api.fetchData();
             if (persistedData && persistedData.users && persistedData.users.length > 0) {
-                setUsers(persistedData.users);
-                setRooms(persistedData.rooms);
-                setChats(persistedData.chats);
+                // Data migration/normalization: ensure essential arrays exist on loaded objects.
+                // This prevents errors like ".includes is not a function" if data from an older schema is loaded.
+                const normalizedUsers = persistedData.users.map(u => ({
+                    ...u,
+                    friends: u.friends || [],
+                }));
+
+                setUsers(normalizedUsers);
+                setRooms(persistedData.rooms || []);
+                setChats(persistedData.chats || []);
+                setFriendRequests(persistedData.friendRequests || []);
             } else {
                 // If no persisted data, use mock data and save it for the first time.
                 console.log("No data found in sheet, initializing with mock data.");
-                setUsers(mockUsers);
+                setUsers(allMockUsers);
                 setRooms(initialRoomsData);
                 setChats(initialChatsData);
-                api.saveData({ users: mockUsers, rooms: initialRoomsData, chats: initialChatsData });
+                setFriendRequests(initialFriendRequestsData);
+                api.saveData({ users: allMockUsers, rooms: initialRoomsData, chats: initialChatsData, friendRequests: initialFriendRequestsData });
             }
             // Use a timeout to ensure splash screen shows for a minimum duration for better UX
             const timer = setTimeout(() => setIsLoading(false), 1500);
@@ -1461,7 +1559,7 @@ const App = () => {
 
         // Debounce the save operation to avoid excessive API calls
         debounceTimeoutRef.current = window.setTimeout(() => {
-            api.saveData({ users, rooms, chats });
+            api.saveData({ users, rooms, chats, friendRequests });
         }, 1500);
 
         return () => {
@@ -1469,7 +1567,7 @@ const App = () => {
                 clearTimeout(debounceTimeoutRef.current);
             }
         };
-    }, [users, rooms, chats]);
+    }, [users, rooms, chats, friendRequests]);
 
     const handleLogin = async (username: string, pass: string): Promise<boolean> => {
         await new Promise(res => setTimeout(res, 500)); // Simulate network delay
@@ -1495,11 +1593,23 @@ const App = () => {
             name: username.charAt(0).toUpperCase() + username.slice(1),
             avatar: `https://picsum.photos/seed/${username}/200/200`,
             bio: 'Nuovo soffio nel vento di Anemos! 🌬️',
+            friends: [],
         };
         setUsers(prev => [...prev, newUser]);
         const { password, ...userToSet } = newUser;
         setCurrentUser(userToSet);
         return true;
+    };
+    
+    const handleSendFriendRequest = (toUserId: string) => {
+        if (!currentUser) return;
+        const newRequest: FriendRequest = {
+            id: `req_${Date.now()}`,
+            fromUserId: currentUser.id,
+            toUserId: toUserId,
+            status: 'pending',
+        };
+        setFriendRequests(prev => [...prev, newRequest]);
     };
 
     const handleLogout = () => {
@@ -1703,7 +1813,15 @@ const App = () => {
     return (
         <ChatProvider chats={chats} setChats={setChats} currentUser={currentUser}>
             <div className="bg-sky-50 min-h-screen font-sans text-slate-800 pb-20">
-                 {!isFullScreenView && <Header onLogoClick={handleLogoClick} />}
+                 {!isFullScreenView && <Header onLogoClick={handleLogoClick} onSearchClick={() => setIsSearchOpen(true)} />}
+                 {currentUser && <SearchModal 
+                    isOpen={isSearchOpen} 
+                    onClose={() => setIsSearchOpen(false)}
+                    currentUser={currentUser}
+                    allUsers={users}
+                    friendRequests={friendRequests}
+                    onSendRequest={handleSendFriendRequest}
+                 />}
                  <div className={!isFullScreenView ? "" : "h-screen"}>
                     {renderView()}
                  </div>
