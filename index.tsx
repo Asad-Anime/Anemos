@@ -1058,7 +1058,7 @@ const RoomsPage = ({ rooms, currentUser, onNavigateToCreate, onJoinByCode, onJoi
     );
 };
 
-const ChatListPage = ({ onSelectChat }: { onSelectChat: (chatId: string) => void }) => {
+const ChatListPage = ({ onSelectChat, onStartNewChat }: { onSelectChat: (chatId: string) => void; onStartNewChat: () => void; }) => {
     const { chats } = useChat();
     const [searchTerm, setSearchTerm] = useState('');
     const filteredChats = chats.filter(chat => chat.participant.username.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -1068,7 +1068,7 @@ const ChatListPage = ({ onSelectChat }: { onSelectChat: (chatId: string) => void
             <div className="sticky top-16 bg-sky-50/80 backdrop-blur-sm z-30 px-4 pt-4 pb-2">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-slate-800">Soffi</h2>
-                    <button className="text-slate-600 hover:text-teal-500">
+                    <button onClick={onStartNewChat} className="text-slate-600 hover:text-teal-500">
                         <PencilSquareIcon className="w-7 h-7" />
                     </button>
                 </div>
@@ -1098,10 +1098,10 @@ const ChatListPage = ({ onSelectChat }: { onSelectChat: (chatId: string) => void
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
                                         <p className="text-md font-semibold text-slate-800 truncate">{chat.participant.username}</p>
-                                        <p className="text-xs text-slate-500">{lastMessage.timestamp}</p>
+                                        <p className="text-xs text-slate-500">{lastMessage?.timestamp}</p>
                                     </div>
                                     <div className="flex items-center justify-between mt-1">
-                                       <p className={`text-sm text-slate-500 truncate ${chat.unreadCount > 0 ? 'font-bold text-slate-800' : ''}`}>{lastMessage.text}</p>
+                                       <p className={`text-sm text-slate-500 truncate ${chat.unreadCount > 0 ? 'font-bold text-slate-800' : ''}`}>{lastMessage?.text}</p>
                                        {chat.unreadCount > 0 && <span className="ml-2 text-xs text-white bg-teal-500 rounded-full px-2 py-0.5 font-semibold">{chat.unreadCount}</span>}
                                     </div>
                                 </div>
@@ -1113,6 +1113,65 @@ const ChatListPage = ({ onSelectChat }: { onSelectChat: (chatId: string) => void
         </div>
     );
 };
+
+const NewChatPage = ({ currentUser, allUsers, chats, onBack, onStartChat }: { currentUser: UserProfile; allUsers: UserProfile[]; chats: ChatConversation[]; onBack: () => void; onStartChat: (participantId: string) => void; }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const friends = useMemo(() => {
+        return allUsers.filter(user => currentUser.friends.includes(user.id));
+    }, [allUsers, currentUser.friends]);
+
+    const existingChatParticipantIds = useMemo(() => {
+        return chats.map(chat => chat.participant.id);
+    }, [chats]);
+
+    const availableFriends = useMemo(() => {
+        return friends
+            .filter(friend => !existingChatParticipantIds.includes(friend.id))
+            .filter(friend => friend.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [friends, existingChatParticipantIds, searchTerm]);
+
+    return (
+        <div className="flex flex-col h-full animate-fadeIn">
+            <header className="sticky top-16 bg-sky-50/80 backdrop-blur-sm z-30 px-4 pt-4 pb-2">
+                 <div className="flex items-center gap-3 mb-4">
+                    <button onClick={onBack} className="p-2 -ml-2 rounded-full text-slate-600 hover:bg-slate-100"><ArrowLeftIcon className="w-6 h-6" /></button>
+                    <h2 className="text-2xl font-bold text-slate-800">Nuovo Soffio</h2>
+                </div>
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <SearchIcon className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Cerca tra i tuoi amici..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                        autoFocus
+                    />
+                </div>
+            </header>
+            <div className="flex-1 overflow-y-auto">
+                {availableFriends.length > 0 ? (
+                     <ul className="divide-y divide-slate-200">
+                        {availableFriends.map(friend => (
+                            <li key={friend.id} onClick={() => onStartChat(friend.id)} className="p-4 flex items-center space-x-4 cursor-pointer hover:bg-slate-50 transition-colors">
+                                <img className="w-14 h-14 rounded-full" src={friend.avatar} alt={friend.name} />
+                                <p className="text-md font-semibold text-slate-800 truncate">{friend.name}</p>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-center text-slate-500 p-8">
+                        {searchTerm ? `Nessun amico trovato per "${searchTerm}"` : "Nessun amico disponibile per una nuova chat."}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 const ConversationPage = ({ chatId, currentUser, onBack }: { chatId: string, currentUser: UserProfile, onBack: () => void }) => {
     const { getChatById, sendMessage, markChatAsRead } = useChat();
@@ -1566,6 +1625,7 @@ const App = () => {
     const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
     const [roomToEdit, setRoomToEdit] = useState<Room | null>(null);
     const [activeChatId, setActiveChatId] = useState<string|null>(null);
+    const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
     const [authView, setAuthView] = useState<'login' | 'signup'>('login');
     
     const debounceTimeoutRef = useRef<number | null>(null);
@@ -1852,6 +1912,28 @@ const App = () => {
         setView('chat');
         setActiveChatId(chatId);
     };
+    
+    const handleStartChat = (participantId: string) => {
+        const participant = users.find(u => u.id === participantId);
+        if (!participant || !currentUser) return;
+
+        const newChat: ChatConversation = {
+            id: `chat_${Date.now()}`,
+            participant: {
+                id: participant.id,
+                username: participant.name, 
+                avatar: participant.avatar,
+                isOnline: true,
+            },
+            messages: [],
+            unreadCount: 0,
+        };
+
+        setChats(prev => [newChat, ...prev]);
+        setIsCreatingNewChat(false);
+        setActiveChatId(newChat.id);
+    };
+
 
     const renderView = () => {
         if (!currentUser) return null; // Should not happen if logic is correct
@@ -1867,7 +1949,16 @@ const App = () => {
                 if (activeChatId) {
                     return <ConversationPage chatId={activeChatId} currentUser={currentUser} onBack={() => setActiveChatId(null)} />;
                 }
-                return <ChatListPage onSelectChat={handleSelectChat} />;
+                if (isCreatingNewChat) {
+                    return <NewChatPage
+                        currentUser={currentUser}
+                        allUsers={users}
+                        chats={chats}
+                        onBack={() => setIsCreatingNewChat(false)}
+                        onStartChat={handleStartChat}
+                    />;
+                }
+                return <ChatListPage onSelectChat={handleSelectChat} onStartNewChat={() => setIsCreatingNewChat(true)} />;
             }
             default: return (<div className="animate-fadeIn"><Stories /><Feed /></div>);
         }
@@ -1922,7 +2013,7 @@ const App = () => {
                  <div className={!isFullScreenView ? "" : "h-screen"}>
                     {renderView()}
                  </div>
-                 {!isFullScreenView && <BottomNav activeView={activeView} setActiveView={(v) => { setActiveChatId(null); setView(v); }} />}
+                 {!isFullScreenView && <BottomNav activeView={activeView} setActiveView={(v) => { setActiveChatId(null); setIsCreatingNewChat(false); setView(v); }} />}
             </div>
         </ChatProvider>
     );
