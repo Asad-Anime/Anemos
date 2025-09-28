@@ -1,5 +1,3 @@
-
-
 /**
  * index.tsx - Anemos Social App Prototype
  * This single file contains the entire React application logic.
@@ -22,7 +20,7 @@ const SCRIPT_URL: string = 'https://script.google.com/macros/s/AKfycbxNByx59I3vL
 // 2. Create an "OAuth 2.0 Client ID" for a "Web application".
 // 3. Add your app's URL to the "Authorized JavaScript origins".
 // 4. Copy the generated Client ID and paste it here.
-const GOOGLE_CLIENT_ID: string = '1099195983339-e4j37q0d091g6u8u0l8k2r2522j3e86g.apps.googleusercontent.com'; // <-- REPLACE THIS VALUE
+const GOOGLE_CLIENT_ID: string = '481924140953-paaif15h35pofqcvc9696lg15cjg15it.apps.googleusercontent.com'; // <-- Client ID updated!
 
 
 // --- SVG ICONS ---
