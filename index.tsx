@@ -1,3 +1,4 @@
+
 /**
  * index.tsx - Anemos Social App Prototype
  * This single file contains the entire React application logic.
@@ -1687,6 +1688,35 @@ const App = () => {
             }
         };
     }, [users, rooms, chats, friendRequests]);
+
+    // Effect for polling for data updates to simulate real-time interaction
+    useEffect(() => {
+        // Don't poll if not logged in or if there's no script URL configured
+        if (!currentUser || !SCRIPT_URL.startsWith('https')) return;
+
+        const pollData = async () => {
+            const persistedData = await api.fetchData();
+            if (persistedData) {
+                // Using JSON.stringify for a simple deep comparison to prevent unnecessary re-renders.
+                // This is crucial for not interrupting the user if the state hasn't changed.
+                if (JSON.stringify(persistedData.chats) !== JSON.stringify(chats)) {
+                    setChats(persistedData.chats || []);
+                }
+                if (JSON.stringify(persistedData.rooms) !== JSON.stringify(rooms)) {
+                    setRooms(persistedData.rooms || []);
+                }
+                if (JSON.stringify(persistedData.friendRequests) !== JSON.stringify(friendRequests)) {
+                    setFriendRequests(persistedData.friendRequests || []);
+                }
+            }
+        };
+
+        // Poll every 4 seconds to get updates from other users
+        const intervalId = setInterval(pollData, 4000);
+
+        // Cleanup interval on component unmount or when dependencies change
+        return () => clearInterval(intervalId);
+    }, [currentUser, chats, rooms, friendRequests]);
 
     const handleLogin = async (username: string, pass: string): Promise<boolean> => {
         await new Promise(res => setTimeout(res, 500)); // Simulate network delay
