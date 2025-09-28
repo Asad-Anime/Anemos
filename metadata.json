@@ -1,0 +1,12 @@
+{
+  "name": "login try  anemos-proto",
+  "version": "0.1.0",
+  "description": "Prototype social app - Anemos, focusing on authentic connections and fluid user experience.",
+  "author": "Anemos Team",
+  "license": "MIT",
+  "platform": [
+    "web"
+  ],
+  "entry": "index.html",
+  "requestFramePermissions": []
+}
