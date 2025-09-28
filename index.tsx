@@ -1582,15 +1582,21 @@ const SignUpPage = ({ onSignUp, onSwitchToLogin }: { onSignUp: (username: string
     );
 };
 
-const GoogleOnboardingPage = ({ googleData, allUsers, onComplete }: { googleData: any; allUsers: UserProfile[], onComplete: (displayName: string, anemosUsername: string) => void }) => {
+const GoogleOnboardingPage = ({ googleData, allUsers, onComplete }: { googleData: any; allUsers: UserProfile[], onComplete: (displayName: string, anemosUsername: string) => Promise<void> }) => {
     const [displayName, setDisplayName] = useState(googleData.name || '');
     const [anemosUsername, setAnemosUsername] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (!anemosUsername.trim() || !displayName.trim()) {
+            setError('Per favore, compila entrambi i campi.');
+            return;
+        }
+
         setIsLoading(true);
 
         const fullAnemosUsername = `${anemosUsername.toLowerCase()}@anemos.com`;
@@ -1600,7 +1606,8 @@ const GoogleOnboardingPage = ({ googleData, allUsers, onComplete }: { googleData
             return;
         }
 
-        onComplete(displayName, anemosUsername);
+        await onComplete(displayName, anemosUsername);
+        // The parent component will handle the loading state after completion.
     };
 
     return (
@@ -1717,7 +1724,10 @@ const App = () => {
 
         // Debounce the save operation to avoid excessive API calls
         debounceTimeoutRef.current = window.setTimeout(() => {
-            api.saveData({ users, rooms, chats, friendRequests });
+            // Do not save if user creation is in progress to avoid race conditions
+            if (authView === 'login') {
+                api.saveData({ users, rooms, chats, friendRequests });
+            }
         }, 1500);
 
         return () => {
@@ -1725,7 +1735,8 @@ const App = () => {
                 clearTimeout(debounceTimeoutRef.current);
             }
         };
-    }, [users, rooms, chats, friendRequests]);
+    }, [users, rooms, chats, friendRequests, authView]);
+
 
     // Effect for polling for data updates to simulate real-time interaction
     useEffect(() => {
@@ -1818,13 +1829,24 @@ const App = () => {
             bio: 'Nuovo soffio nel vento di Anemos! 🌬️',
             friends: [],
         };
-        setUsers(prev => [...prev, newUser]);
+        
+        const nextUsers = [...users, newUser];
+
+        // Explicitly save the new state immediately to guarantee persistence
+        await api.saveData({
+            users: nextUsers,
+            rooms,
+            chats,
+            friendRequests
+        });
+
+        setUsers(nextUsers);
         const { password, ...userToSet } = newUser;
         setCurrentUser(userToSet);
         return true;
     };
     
-    const handleCompleteGoogleOnboarding = (displayName: string, anemosUsername: string) => {
+    const handleCompleteGoogleOnboarding = async (displayName: string, anemosUsername: string) => {
         if (!googleOnboardingData) return;
 
         const fullAnemosUsername = `${anemosUsername.toLowerCase()}@anemos.com`;
@@ -1840,8 +1862,21 @@ const App = () => {
             friends: [],
         };
         
-        setUsers(prev => [...prev, newUser]);
+        const nextUsers = [...users, newUser];
+
+        // Explicitly save the new state immediately to guarantee persistence
+        await api.saveData({
+            users: nextUsers,
+            rooms,
+            chats,
+            friendRequests,
+        });
+        
+        // Update local React state
+        setUsers(nextUsers);
         setCurrentUser(newUser);
+        
+        // Cleanup onboarding UI state
         setGoogleOnboardingData(null);
         setAuthView('login');
     };
