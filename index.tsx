@@ -183,6 +183,11 @@ const EyeSlashIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.243 4.243L6.228 6.228" /></svg>
 );
 
+const UserCircleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+);
+
+
 // --- REACTION ICONS ---
 const AppreciateIcon = ({ className = 'w-7 h-7' }: { className?: string }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>;
 const InterestingIcon = ({ className = 'w-7 h-7' }: { className?: string }) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M12 1a8 8 0 015.66 13.66L12 23l-5.66-8.34A8 8 0 0112 1zM12 7v6"></path><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
@@ -1233,6 +1238,32 @@ const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, 
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
+    const [savedAccounts, setSavedAccounts] = useState<{username: string, password: string}[]>([]);
+    const [showSavedAccounts, setShowSavedAccounts] = useState(false);
+    const usernameInputRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('anemos-saved-accounts');
+            if (saved) {
+                setSavedAccounts(JSON.parse(saved));
+            }
+        } catch (e) {
+            console.error("Failed to parse saved accounts from localStorage", e);
+            localStorage.removeItem('anemos-saved-accounts');
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (usernameInputRef.current && !usernameInputRef.current.contains(event.target as Node)) {
+                setShowSavedAccounts(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1241,9 +1272,31 @@ const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, 
         const success = await onLogin(username, password);
         if (!success) {
             setError('Username o password non validi.');
+        } else {
+             // NOTE: Saving credentials to localStorage is insecure and only for this prototype.
+            if (rememberMe) {
+                const updatedAccounts = [...savedAccounts];
+                const existingAccountIndex = updatedAccounts.findIndex(acc => acc.username.toLowerCase() === username.toLowerCase());
+                
+                const newAccount = { username, password };
+
+                if (existingAccountIndex > -1) {
+                    updatedAccounts[existingAccountIndex] = newAccount;
+                } else {
+                    updatedAccounts.push(newAccount);
+                }
+                localStorage.setItem('anemos-saved-accounts', JSON.stringify(updatedAccounts));
+                setSavedAccounts(updatedAccounts);
+            }
         }
         setIsLoading(false);
     };
+
+    const handleSelectAccount = (account: {username: string, password: string}) => {
+        setUsername(account.username);
+        setPassword(account.password);
+        setShowSavedAccounts(false);
+    }
 
     return (
         <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 animate-fadeIn">
@@ -1252,7 +1305,25 @@ const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1">Username</label>
-                    <input type="text" id="username" value={username} onChange={e => setUsername(e.target.value)} placeholder="es. aria@anemos.com" required className="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-900" />
+                    <div className="relative" ref={usernameInputRef}>
+                        <input type="text" id="username" value={username} onChange={e => setUsername(e.target.value)} onFocus={() => savedAccounts.length > 0 && setShowSavedAccounts(true)} placeholder="es. aria@anemos.com" required className="block w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-900" />
+                        {showSavedAccounts && savedAccounts.length > 0 && (
+                            <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg z-20 animate-fadeInUp max-h-40 overflow-y-auto">
+                                <ul>
+                                    {savedAccounts.map((account) => (
+                                        <li 
+                                            key={account.username}
+                                            onClick={() => handleSelectAccount(account)}
+                                            className="px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 cursor-pointer flex items-center gap-2"
+                                        >
+                                            <UserCircleIcon className="w-5 h-5 text-slate-400"/>
+                                            <span>{account.username}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div>
                     <label htmlFor="password"  className="block text-sm font-medium text-slate-700 mb-1">Password</label>
@@ -1262,6 +1333,10 @@ const LoginPage = ({ onLogin, onSwitchToSignUp }: { onLogin: (username: string, 
                            {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
                         </button>
                     </div>
+                </div>
+                 <div className="flex items-center">
+                    <input id="remember-me" name="remember-me" type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"/>
+                    <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-700">Salva dati di accesso</label>
                 </div>
                 <button type="submit" disabled={isLoading} className="w-full bg-teal-500 text-black font-semibold py-2.5 rounded-lg hover:bg-teal-600 transition disabled:bg-teal-300">{isLoading ? 'Accesso...' : 'Entra nel Vento'}</button>
             </form>
